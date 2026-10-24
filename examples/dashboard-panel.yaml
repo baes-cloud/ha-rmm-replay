@@ -1,0 +1,15 @@
+# Fullscreen Panel Dashboard Configuration
+# Save under a custom Lovelace dashboard (e.g. url_path: radar-replay)
+title: Radar Replay
+views:
+  - title: Radar Replay
+    path: default_view
+    icon: mdi:motion-play
+    panel: true
+    cards:
+      - type: custom:rmm-replay-card
+        default_window_hours: 0.5
+        default_trail_secs: 120
+        image_url: /local/images/floorplan_cropped.png
+        floorplan_url: /local/rmm-replay/floorplan.json
+        history_url: /local/rmm-replay/history_24h.json

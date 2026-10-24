@@ -1,0 +1,5 @@
+#!/usr/bin/with-contenv bashio
+# s6-overlay service run script for rmm-recorder daemon
+exec 2>&1
+echo "[rmm-recorder] Starting Radar Map Manager history recorder daemon..."
+exec python3 /config/www/rmm-replay/recorder_daemon.py

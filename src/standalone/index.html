@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Bæovision · Radar Replay</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #1B242D;
+      color: #F1ECEA;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div id="mount"></div>
+  <script type="module">
+    import "/local/rmm-replay/rmm-replay-card.js?v=4";
+
+    const params = new URLSearchParams(window.location.search);
+    const winHours = parseFloat(params.get("win")) || 0.5;
+    const trailSecs = parseInt(params.get("trail")) || 120;
+    const isMock = params.get("mock") === "1";
+    const histUrl = isMock
+      ? "/local/rmm-replay/mock_history.json"
+      : (params.get("hist") || "/local/rmm-replay/history_24h.json");
+
+    const card = document.createElement("rmm-replay-card");
+    card.id = "card";
+    card.setConfig({
+      default_window_hours: winHours,
+      default_trail_secs: trailSecs,
+      history_url: histUrl,
+    });
+
+    document.getElementById("mount").appendChild(card);
+
+    function applyUrlParams() {
+      if (!card) return;
+      let changed = false;
+
+      if (params.get("heatmap") === "1" && !card.showHeatmap) {
+        card.showHeatmap = true;
+        changed = true;
+      }
+      if (params.get("zones") === "1" && !card.showZones) {
+        card.showZones = true;
+        if (card._drawZonesAndRadarsSvg) card._drawZonesAndRadarsSvg();
+        changed = true;
+      }
+      if (params.get("noraw") === "1" && card.showRawRadars) {
+        card.showRawRadars = false;
+        if (card._drawZonesAndRadarsSvg) card._drawZonesAndRadarsSvg();
+        changed = true;
+      }
+      if (params.get("speed")) {
+        const s = parseFloat(params.get("speed"));
+        if (!isNaN(s) && card.speed !== s) {
+          card.speed = s;
+          changed = true;
+        }
+      }
+      if (params.get("seek")) {
+        const seekRatio = parseFloat(params.get("seek"));
+        if (!isNaN(seekRatio) && card.windowStartTs && card.windowEndTs) {
+          card.isLive = false;
+          card.cursorTs = card.windowStartTs + seekRatio * (card.windowEndTs - card.windowStartTs);
+          if (card._renderFrameAt) card._renderFrameAt(card.cursorTs);
+          changed = true;
+        }
+      }
+      if (params.get("play") === "1" && !card.isPlaying) {
+        card.isPlaying = true;
+        card._lastTickTime = performance.now();
+        changed = true;
+      }
+
+      if (changed && card._updateControlsUI) {
+        card._updateControlsUI();
+      }
+    }
+
+    setTimeout(applyUrlParams, 400);
+    setTimeout(applyUrlParams, 1200);
+
+    // Only sync HA live entity state if not in pure mock history mode
+    if (!isMock) {
+      function syncParentHass() {
+        try {
+          const ha = window.parent && window.parent.document && window.parent.document.querySelector("home-assistant");
+          if (ha && ha.hass && card) {
+            card.hass = ha.hass;
+          }
+        } catch (_) {}
+      }
+      syncParentHass();
+      setInterval(syncParentHass, 2000);
+    }
+  </script>
+</body>
+</html>

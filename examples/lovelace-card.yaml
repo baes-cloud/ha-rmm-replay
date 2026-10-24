@@ -1,0 +1,10 @@
+# Example 1: Standard Lovelace View Card
+type: custom:rmm-replay-card
+default_window_hours: 0.5
+default_trail_secs: 120
+image_url: /local/images/floorplan_cropped.png
+floorplan_url: /local/rmm-replay/floorplan.json
+history_url: /local/rmm-replay/history_24h.json
+
+# Example 2: Minimal Configuration (defaults to /local/ paths)
+# type: custom:rmm-replay-card

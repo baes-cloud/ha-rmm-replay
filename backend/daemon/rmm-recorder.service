@@ -1,0 +1,15 @@
+[Unit]
+Description=Home Assistant RMM Movement History Recorder Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/config/www/rmm-replay
+ExecStart=/usr/bin/python3 /config/www/rmm-replay/recorder_daemon.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

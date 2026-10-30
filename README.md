@@ -7,7 +7,7 @@
 
 > **Continuous 24h–48h spatial movement recorder, timeline scrubber, and high-performance playback dashboard for Home Assistant and [Radar Map Manager](https://github.com/Moe8383/radar_map_manager).**
 
-![Bæovision Radar Replay Demo](media/demo-replay.gif)
+![Bæovision Radar Replay Demo](media/demo-replay-v2.gif)
 
 ---
 
@@ -288,8 +288,8 @@ ha-rmm-replay/
 │   ├── floorplan.sample.json
 │   └── mock_history.json
 └── media/                             # Demo animations and screenshots
-    ├── demo-replay.gif
-    ├── demo-replay.mp4
+    ├── demo-replay-v2.gif
+    ├── demo-replay-v2.mp4
     ├── overview.png
     ├── heatmap.png
     ├── zones-and-radars.png

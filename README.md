@@ -155,19 +155,21 @@ Close-up of the scrubber bar showing the movement density histogram and transpor
 
 You can choose either of two deployment modes:
 
-#### Option A: Native In-Core Integration (Recommended)
-Integrates directly with the `radar_map_manager` custom component:
-1. Copy `backend/custom_component/history_recorder.py` into your RMM component folder:
+#### Option A: Native Integration (Recommended)
+A small `rmm_replay` integration that runs inside HA Core next to Radar Map Manager. It listens to RMM's `rmm_stream_update` signal and registers the `rmm/history` WebSocket command. It never touches RMM's own files, so updating RMM through HACS leaves it alone.
+1. Copy the integration into your config:
    ```bash
-   cp backend/custom_component/history_recorder.py /config/custom_components/radar_map_manager/
+   cp -r custom_components/rmm_replay /config/custom_components/
    ```
-2. In `/config/custom_components/radar_map_manager/__init__.py`, import and initialize the recorder in `async_setup_entry`:
-   ```python
-   # In async_setup_entry:
-   from .history_recorder import async_setup_recorder
-   hass.data["rmm_history_recorder"] = await async_setup_recorder(hass)
+2. Enable it in `configuration.yaml`:
+   ```yaml
+   rmm_replay:
    ```
-3. Restart Home Assistant. The recorder will run natively inside HA Core and register the `rmm/history` WebSocket command.
+3. Restart Home Assistant. The log shows `RMM History Recorder started (N frames loaded, retention=48h)`.
+
+If RMM stops sending data for 10 minutes (RMM not loaded, or an RMM update renamed the signal), a **Radar Replay is not recording** notification appears in Home Assistant and clears itself once data flows again.
+
+> Upgrading from the old setup that patched `history_recorder.py` into `radar_map_manager/__init__.py`: remove those lines and that file (an RMM update usually does this for you), then follow the steps above. The existing history file is picked up as is.
 
 #### Option B: Standalone Daemon (Zero HA Code Modifications)
 Runs as an independent Python process connecting to Home Assistant over WebSocket:
@@ -256,13 +258,15 @@ ha-rmm-replay/
 │   └── standalone/                    # Standalone kiosk viewer & assets
 │       ├── index.html
 │       └── fonts/
+├── custom_components/rmm_replay/      # Native recorder integration (Option A)
+│   ├── __init__.py
+│   ├── manifest.json
+│   └── recorder.py
 ├── backend/                           # Movement recorders
-│   ├── daemon/                        # Standalone aiohttp daemon & services
-│   │   ├── recorder_daemon.py
-│   │   ├── rmm-recorder.service
-│   │   └── s6-run
-│   └── custom_component/              # Native RMM integration helper
-│       └── history_recorder.py
+│   └── daemon/                        # Standalone aiohttp daemon & services (Option B)
+│       ├── recorder_daemon.py
+│       ├── rmm-recorder.service
+│       └── s6-run
 ├── examples/                          # Reference configs & sample datasets
 │   ├── lovelace-card.yaml
 │   ├── dashboard-panel.yaml

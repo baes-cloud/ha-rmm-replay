@@ -9,9 +9,14 @@ import voluptuous as vol
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.components import websocket_api
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.components import persistent_notification
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.helpers.event import async_track_time_interval
 from datetime import timedelta
-from .const import DOMAIN
+
+# Radar Map Manager's domain. Its coordinator holds the zones and radar layouts,
+# and it broadcasts every stream frame on the 'rmm_stream_update' dispatcher signal.
+DOMAIN = 'radar_map_manager'
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,6 +26,8 @@ MOVE_THRESHOLD_PCT = 0.16      # ~1.3 cm on floorplan
 RAW_THRESHOLD_PCT = 0.35       # Raw LD2450 target movement threshold
 HEARTBEAT_OCCUPIED = 15.0      # Keyframe every 15s when occupied & still
 HEARTBEAT_EMPTY = 60.0         # Keyframe every 60s when empty
+STALE_AFTER = 600.0            # Warn when RMM has sent nothing for 10 minutes
+STALE_NOTIFICATION_ID = 'rmm_replay_stale'
 
 RADAR_SHORT = {
     'club_apollo_r_pro_1_ld2450': 'apollo',
@@ -102,6 +109,10 @@ class RMMHistoryRecorder:
         self._last_compact_ts = time.time()
         self._exact_start_ts = None
         self._flushing = False
+        self._started_ts = time.time()
+        self._last_signal_ts = 0.0
+        self._stale = False
+        self._unsub_stop = None
 
     async def async_start(self):
         await self.hass.async_add_executor_job(self._load_from_disk)
@@ -111,13 +122,26 @@ class RMMHistoryRecorder:
         self._unsub_timer = async_track_time_interval(
             self.hass, self._async_periodic_flush, timedelta(seconds=5)
         )
+        self._unsub_stop = self.hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STOP, self._async_on_stop
+        )
         _LOGGER.warning(
             'RMM History Recorder started (%d frames loaded, retention=%dh)',
             len(self.frames),
             RETENTION_SECONDS // 3600,
         )
 
+    async def _async_on_stop(self, _event=None):
+        self._unsub_stop = None
+        lines = list(self._pending_lines)
+        self._pending_lines.clear()
+        if lines:
+            await self.hass.async_add_executor_job(self._flush_to_disk, lines, False)
+
     def stop(self):
+        if self._unsub_stop:
+            self._unsub_stop()
+            self._unsub_stop = None
         if self._unsub_stream:
             self._unsub_stream()
             self._unsub_stream = None
@@ -259,6 +283,7 @@ class RMMHistoryRecorder:
     @callback
     def _on_stream_update(self, data: dict):
         now = time.time()
+        self._last_signal_ts = now
         try:
             frame = self._extract_frame(data, now)
             if not self._should_record(frame, now):
@@ -325,7 +350,27 @@ class RMMHistoryRecorder:
             }
         }
 
+    def _check_stale(self):
+        now = time.time()
+        quiet_for = now - (self._last_signal_ts or self._started_ts)
+        if quiet_for > STALE_AFTER and not self._stale:
+            self._stale = True
+            _LOGGER.warning('RMM History Recorder: no data from Radar Map Manager for %d min', quiet_for // 60)
+            persistent_notification.async_create(
+                self.hass,
+                'Radar Replay has had no data from Radar Map Manager for over 10 minutes, '
+                'so nothing is being recorded. Check that Radar Map Manager is loaded and '
+                'still sends the rmm_stream_update signal (an RMM update can rename it).',
+                title='Radar Replay is not recording',
+                notification_id=STALE_NOTIFICATION_ID,
+            )
+        elif quiet_for <= STALE_AFTER and self._stale:
+            self._stale = False
+            _LOGGER.warning('RMM History Recorder: Radar Map Manager data is flowing again')
+            persistent_notification.async_dismiss(self.hass, STALE_NOTIFICATION_ID)
+
     async def _async_periodic_flush(self, _now=None):
+        self._check_stale()
         if self._flushing or not self._pending_lines:
             return
         self._flushing = True

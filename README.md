@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-teal.svg)](LICENSE)
 [![Radar: LD2450](https://img.shields.io/badge/Radar-LD2450%20mmWave-orange.svg)](#)
 
-> **Continuous 24h–48h spatial movement recorder, timeline scrubber, and high-performance playback dashboard for Home Assistant and [Radar Map Manager](https://github.com/Limych/radar_map_manager).**
+> **Continuous 24h–48h spatial movement recorder, timeline scrubber, and high-performance playback dashboard for Home Assistant and [Radar Map Manager](https://github.com/Moe8383/radar_map_manager).**
 
 ![Bæovision Radar Replay Demo](media/demo-replay.gif)
 
@@ -166,6 +166,21 @@ A small `rmm_replay` integration that runs inside HA Core next to Radar Map Mana
    rmm_replay:
    ```
 3. Restart Home Assistant. The log shows `RMM History Recorder started (N frames loaded, retention=48h)`.
+
+**Naming your radars (optional).** Out of the box each radar shows under its Radar Map Manager name and gets a colour from the card's palette. To give them short codes, friendlier legend labels or fixed colours, list them by their RMM radar name:
+```yaml
+rmm_replay:
+  radars:
+    club_apollo_r_pro_1_ld2450:
+      short: apollo            # code stored in every frame, so keep it short
+      label: Apollo R-PRO-1    # legend text
+      color: "#5CE1E6"         # legend, FOV cone and raw-dot colour
+    ld2450_tracker:
+      short: t1
+      label: Tracker 1 (Bed/Bath)
+      color: "#FF8A80"
+```
+All three keys are optional. Changing a radar's `short` code after recording has started leaves older frames under the old code until they age out of the 48-hour buffer.
 
 If RMM stops sending data for 10 minutes (RMM not loaded, or an RMM update renamed the signal), a **Radar Replay is not recording** notification appears in Home Assistant and clears itself once data flows again.
 

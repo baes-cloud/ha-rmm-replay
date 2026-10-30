@@ -29,24 +29,42 @@ HEARTBEAT_EMPTY = 60.0         # Keyframe every 60s when empty
 STALE_AFTER = 600.0            # Warn when RMM has sent nothing for 10 minutes
 STALE_NOTIFICATION_ID = 'rmm_replay_stale'
 
-RADAR_SHORT = {
-    'club_apollo_r_pro_1_ld2450': 'apollo',
-    'ld2450_tracker': 't1',
-    'ld2450_tracker_2': 't2',
-}
-
-RADAR_LABELS = {
-    'apollo': 'Apollo R-PRO-1 (Lounge/Kitchen)',
-    't1': 'LD2450 Tracker 1 (Bedroom/Bath)',
-    't2': 'LD2450 Tracker 2 (Office/Entry)',
-}
 
 
-def _short_src(src_str: str) -> str:
-    if ':' in src_str:
-        rname, tid = src_str.split(':', 1)
-        return f'{RADAR_SHORT.get(rname.lower(), rname)}:{tid}'
-    return src_str
+class RadarNames:
+    """Maps RMM radar names to the short codes, labels and colours stored in frames.
+
+    Built from the optional `radars:` block of the rmm_replay config. A radar that
+    isn't listed keeps its RMM name as its code and label.
+    """
+
+    def __init__(self, radars_conf: dict | None = None):
+        self._by_name = {}
+        for rname, conf in (radars_conf or {}).items():
+            conf = conf or {}
+            self._by_name[str(rname).lower()] = {
+                'code': conf.get('short') or rname,
+                'label': conf.get('label') or rname,
+                'color': conf.get('color'),
+            }
+
+    def code(self, rname: str) -> str:
+        entry = self._by_name.get(rname.lower())
+        return entry['code'] if entry else rname
+
+    def label(self, rname: str) -> str:
+        entry = self._by_name.get(rname.lower())
+        return entry['label'] if entry else rname
+
+    def color(self, rname: str):
+        entry = self._by_name.get(rname.lower())
+        return entry['color'] if entry else None
+
+    def short_src(self, src_str: str) -> str:
+        if ':' in src_str:
+            rname, tid = src_str.split(':', 1)
+            return f'{self.code(rname)}:{tid}'
+        return src_str
 
 
 def _point_in_poly(x: float, y: float, poly: list) -> bool:
@@ -96,8 +114,9 @@ def _project_raw_point(layout: dict, pt: dict) -> tuple[float, float] | None:
 
 
 class RMMHistoryRecorder:
-    def __init__(self, hass: HomeAssistant):
+    def __init__(self, hass: HomeAssistant, radars_conf: dict | None = None):
         self.hass = hass
+        self.names = RadarNames(radars_conf)
         self.storage_path = hass.config.path('.storage', 'rmm_movement_history.jsonl')
         self.www_json_path = hass.config.path('www', 'rmm-replay', 'history_24h.json')
         self.frames: collections.deque = collections.deque()
@@ -209,7 +228,7 @@ class RMMHistoryRecorder:
                 continue
             fx, fy = round(float(tx), 2), round(float(ty), 2)
             state = 'hold' if 'hold' in sources else 'active'
-            short_srcs = [_short_src(s) for s in sources]
+            short_srcs = [self.names.short_src(s) for s in sources]
             zlabel = get_zone_label(fx, fy)
             entry = {
                 'id': t.get('id', 'target_1'),
@@ -227,7 +246,7 @@ class RMMHistoryRecorder:
         for r_name, r_conf in radars.items():
             if r_conf.get('map_group', 'default') != 'default' or r_conf.get('paused'):
                 continue
-            rcode = RADAR_SHORT.get(r_name.lower(), r_name)
+            rcode = self.names.code(r_name)
             layout = r_conf.get('layout') or {}
             for rt in r_conf.get('targets') or []:
                 proj = _project_raw_point(layout, rt)
@@ -323,10 +342,11 @@ class RMMHistoryRecorder:
         radars_out = {}
         for rname, rconf in (cdata.get('radars') or {}).items():
             if rconf.get('map_group', 'default') == 'default':
-                rcode = RADAR_SHORT.get(rname.lower(), rname)
+                rcode = self.names.code(rname)
                 radars_out[rcode] = {
                     'name': rname,
-                    'label': RADAR_LABELS.get(rcode, rname),
+                    'label': self.names.label(rname),
+                    'color': self.names.color(rname),
                     'layout': rconf.get('layout') or {},
                     'paused': bool(rconf.get('paused', False)),
                 }
@@ -451,14 +471,14 @@ def websocket_rmm_history(hass: HomeAssistant, connection: websocket_api.ActiveC
     rec.handle_ws_history(connection, msg)
 
 
-async def async_setup_recorder(hass: HomeAssistant):
+async def async_setup_recorder(hass: HomeAssistant, radars_conf: dict | None = None):
     old = hass.data.get('rmm_history_recorder')
     if old:
         try:
             old.stop()
         except Exception:
             pass
-    rec = RMMHistoryRecorder(hass)
+    rec = RMMHistoryRecorder(hass, radars_conf)
     hass.data['rmm_history_recorder'] = rec
     await rec.async_start()
     try:

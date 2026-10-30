@@ -298,6 +298,14 @@ ha-rmm-replay/
 
 ---
 
+## Credits & Thanks
+
+- **[Moe8383](https://github.com/Moe8383)** for [Radar Map Manager](https://github.com/Moe8383/radar_map_manager). RMM does the hard part: fusing several LD2450s onto one floorplan, the zones, and the live `rmm/stream` this whole project records. Radar Replay is just a tape recorder bolted onto it. If you find this useful, go star RMM first.
+- [Hi-Link](https://www.hlktech.net/) for the LD2450 and [Apollo Automation](https://apolloautomation.com/) for the R-PRO-1.
+- Built with Google's Antigravity, and maintained with Claude Code.
+
+---
+
 ## License
 
 Distributed under the MIT License. See [LICENSE](LICENSE) for more information.

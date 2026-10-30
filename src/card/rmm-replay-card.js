@@ -15,17 +15,9 @@ const TARGET_COLORS = {
   default: "#8CBDB5",
 };
 
-const RADAR_COLORS = {
-  apollo: "#5CE1E6", // Cyan - Apollo R-PRO-1
-  t1: "#FF8A80",     // Coral - LD2450 Tracker 1
-  t2: "#FFD166",     // Gold - LD2450 Tracker 2
-};
-
-const RADAR_SHORT_NAMES = {
-  apollo: "Apollo R-PRO-1",
-  t1: "Tracker 1 (Bed/Bath)",
-  t2: "Tracker 2 (Office)",
-};
+// Radar colours come from the rmm_replay `radars:` config (sent with the history);
+// radars without one take the next colour from this palette.
+const RADAR_PALETTE = ["#5CE1E6", "#FF8A80", "#FFD166", "#B4A7D6", "#8CBDB5", "#F4A261"];
 
 const WINDOWS = [
   { label: "15m", hours: 0.25 },
@@ -284,7 +276,39 @@ class RmmReplayCard extends HTMLElement {
     }
   }
 
+  _radarColor(rcode) {
+    const radars = this.radars || {};
+    const info = radars[rcode];
+    if (info && info.color) return info.color;
+    const idx = Object.keys(radars).sort().indexOf(rcode);
+    return RADAR_PALETTE[(idx < 0 ? 0 : idx) % RADAR_PALETTE.length];
+  }
+
+  // RMM radar name -> code used in frames (matches the recorder's naming).
+  _radarCode(rname) {
+    const lower = String(rname).toLowerCase();
+    for (const [code, info] of Object.entries(this.radars || {})) {
+      if (String(info.name || "").toLowerCase() === lower) return code;
+    }
+    return rname;
+  }
+
+  _drawRadarLegend() {
+    const box = this.$("radarLegend");
+    if (!box) return;
+    box.replaceChildren();
+    for (const [rcode, info] of Object.entries(this.radars || {}).sort(([a], [b]) => a.localeCompare(b))) {
+      const item = document.createElement("span");
+      item.className = "leg";
+      const dot = document.createElement("i");
+      dot.style.background = this._radarColor(rcode);
+      item.append(dot, document.createTextNode(info.label || info.name || rcode));
+      box.append(item);
+    }
+  }
+
   _drawZonesAndRadarsSvg() {
+    this._drawRadarLegend();
     const zonesG = this.$("zonesLayer");
     if (zonesG) {
       zonesG.replaceChildren();
@@ -314,7 +338,7 @@ class RmmReplayCard extends HTMLElement {
         const oy = Number(layout.origin_y ?? 50);
         const rot = Number(layout.rotation ?? 0);
         const [rx, ry] = this._mapXY(ox, oy);
-        const col = RADAR_COLORS[rcode] || "#8CBDB5";
+        const col = this._radarColor(rcode);
 
         const g = this._el("g", { class: "radar-origin", transform: `translate(${rx.toFixed(1)} ${ry.toFixed(1)})` }, radarsG);
         // Subtle 120-deg FOV wedge
@@ -424,9 +448,10 @@ class RmmReplayCard extends HTMLElement {
       if ((t.count || 0) <= 0 && !srcs.includes("hold")) continue;
       if (t.x == null || t.y == null) continue;
       const znames = incZones.filter((z) => pointInPoly(t.x, t.y, z.points)).map((z) => z.name);
-      const shortSrcs = srcs.map((s) =>
-        s.replace("club_apollo_r_pro_1_ld2450", "apollo").replace("ld2450_tracker_2", "t2").replace("ld2450_tracker", "t1")
-      );
+      const shortSrcs = srcs.map((s) => {
+        const i = s.indexOf(":");
+        return i < 0 ? s : `${this._radarCode(s.slice(0, i))}${s.slice(i)}`;
+      });
       fused.push({
         id: t.id,
         x: Number(t.x),
@@ -439,14 +464,9 @@ class RmmReplayCard extends HTMLElement {
 
     const raw = [];
     const rdict = d.radars || {};
-    const rmap = {
-      club_apollo_r_pro_1_ld2450: "apollo",
-      ld2450_tracker: "t1",
-      ld2450_tracker_2: "t2",
-    };
     for (const [rname, rconf] of Object.entries(rdict)) {
-      const rcode = rmap[rname.toLowerCase()];
-      if (!rcode || rconf.paused) continue;
+      if (rconf.paused || (rconf.map_group || "default") !== "default") continue;
+      const rcode = this._radarCode(rname);
       const lay = rconf.layout || {};
       for (const rt of rconf.targets || []) {
         const xv = Number(rt.x || 0), yv = Number(rt.y || 0);
@@ -814,7 +834,7 @@ class RmmReplayCard extends HTMLElement {
         ctx.save();
         for (const [rcode, tIdx, rx, ry] of frame.r) {
           const [cx, cy] = toCanvasXY(rx, ry);
-          const col = RADAR_COLORS[rcode] || "#5CE1E6";
+          const col = this._radarColor(rcode);
           const rinfo = (this.radars && this.radars[rcode]) || {};
           if (rinfo.layout) {
             const [ox, oy] = toCanvasXY(Number(rinfo.layout.origin_x ?? 50), Number(rinfo.layout.origin_y ?? 50));
@@ -978,7 +998,7 @@ class RmmReplayCard extends HTMLElement {
               const srcBadges = (t.src || [])
                 .map((s) => {
                   const rcode = s.split(":")[0];
-                  const rcol = RADAR_COLORS[rcode] || "#8CBDB5";
+                  const rcol = this._radarColor(rcode);
                   return `<span class="src-pill" style="border-color:${rcol};color:${rcol}">${s}</span>`;
                 })
                 .join("");
@@ -1877,11 +1897,7 @@ class RmmReplayCard extends HTMLElement {
                 <button class="layer-btn" id="toggleZonesBtn" title="Show RMM room & stationary zone polygons">RMM Zones</button>
                 <button class="layer-btn active" id="toggleLightsBtn" title="Show & toggle floorplan lights">Lights (<span id="lightsCountBadge">0 on</span>)</button>
               </div>
-              <div class="legend-items">
-                <span class="leg"><i style="background:#5CE1E6"></i>Apollo R-PRO-1</span>
-                <span class="leg"><i style="background:#FF8A80"></i>Tracker 1</span>
-                <span class="leg"><i style="background:#FFD166"></i>Tracker 2</span>
-              </div>
+              <div class="legend-items" id="radarLegend"></div>
             </div>
 
             <div class="plan-wrap" id="planWrap">

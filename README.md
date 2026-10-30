@@ -53,7 +53,7 @@ Consequently, most users exclude raw radar coordinates from the recorder and rel
 ## Visual Tour
 
 ### Full Dashboard Overview
-Complete view showing active target trail from Lounge to Kitchen, Apollo $120^\circ$ FOV detection wedge, activity sparkline timeline, and room dwell breakdown:
+Complete view: a walk from the lounge sofa, round the coffee table, past the kitchen and out to the front door, with the radar FOV wedges, activity timeline and room dwell breakdown:
 
 ![Overview](media/overview.png)
 

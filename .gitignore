@@ -30,3 +30,4 @@ wheels/
 
 # Internal helper scripts
 capture_gif.py
+capture_media.py

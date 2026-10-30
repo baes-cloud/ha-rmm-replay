@@ -1,0 +1,12 @@
+{
+  "domain": "rmm_replay",
+  "name": "Radar Replay",
+  "after_dependencies": ["radar_map_manager"],
+  "codeowners": ["@baes-cloud"],
+  "dependencies": ["websocket_api"],
+  "documentation": "https://github.com/baes-cloud/ha-rmm-replay",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/baes-cloud/ha-rmm-replay/issues",
+  "requirements": [],
+  "version": "1.1.0"
+}
